@@ -12,6 +12,7 @@ from datetime import datetime
 from .export import card_markdown, report_markdown, write_cards, write_csv
 from .inputs import TeacherInput, load_inputs
 from .models import SiteReport
+from .levels import LevelError, describe_levels, resolve_plan
 from .profile import build_profile
 from .fetcher import Fetcher
 from .list_parser import auto_detect, describe_clusters
@@ -101,11 +102,30 @@ def _api() -> Fetcher:
     return Fetcher(min_interval=1.0, respect_robots=False)
 
 
+def _plan(a: argparse.Namespace):
+    split = lambda v: [x.strip() for x in (v or "").split(",") if x.strip()]
+    without = split(a.without) + (["papers"] if getattr(a, "no_papers", False) else [])
+    try:
+        plan = resolve_plan(a.level, split(a.with_), without, a.levels_config)
+    except LevelError as e:
+        raise SystemExit(f"配置错误：{e}")
+    print(f"抓取级别 {plan.describe()}")
+    for n in plan.notes:
+        print(f"  提示：{n}")
+    return plan
+
+
+def cmd_levels(a: argparse.Namespace) -> int:
+    print(describe_levels(a.levels_config))
+    return 0
+
+
 def cmd_profile(a: argparse.Namespace) -> int:
     inp = TeacherInput(name=a.name, school=a.school, college=a.college, profile_url=a.url,
                        email=a.email, title=a.title, name_en=a.name_en)
+    plan = _plan(a)
     with Fetcher() as web, _api() as api:
-        t = build_profile(inp, web=web, api=api, papers=not a.no_papers)
+        t = build_profile(inp, web=web, api=api, plan=plan)
     store = Store()
     store.save_site("input", [t], SiteReport(site_id="input", teachers=1), mark_inactive=False)
     md = card_markdown(t)
@@ -122,6 +142,7 @@ def cmd_enrich(a: argparse.Namespace) -> int:
     inputs = load_inputs(a.input)
     if a.limit:
         inputs = inputs[: a.limit]
+    plan = _plan(a)
     store = Store()
     done = store.recent_keys("input", a.max_age_days) if not a.force else set()
     out_dir = config.EXPORT_DIR / (a.name or f"batch_{datetime.now():%Y%m%d_%H%M}")
@@ -130,12 +151,13 @@ def cmd_enrich(a: argparse.Namespace) -> int:
     with Fetcher() as web, _api() as api:
         for i, inp in enumerate(inputs, 1):
             cached = store.get_input(inp.name, inp.school, inp.profile_url) if done else None
-            if cached and cached.key in done:
+            # 旧结果的模块必须覆盖本次要求的模块才复用（L2 的结果不能当 L3 用）
+            if cached and cached.key in done and set(plan.modules) <= set(cached.raw.get("modules") or []):
                 results.append(cached)
                 print(f"[{i}/{len(inputs)}] {inp.school} {inp.name}：{a.max_age_days} 天内已处理，跳过")
                 continue
             try:
-                t = build_profile(inp, web=web, api=api, papers=not a.no_papers)
+                t = build_profile(inp, web=web, api=api, plan=plan)
             except Exception as e:  # 单个老师失败不影响整批，但必须在结果里看得到
                 failed += 1
                 print(f"[{i}/{len(inputs)}] {inp.school} {inp.name}：失败 {type(e).__name__}: {e}")
@@ -146,8 +168,14 @@ def cmd_enrich(a: argparse.Namespace) -> int:
                 continue
             store.save_site("input", [t], SiteReport(site_id="input", teachers=1), mark_inactive=False)
             results.append(t)
+            extra = ""
+            if plan.has("fulltext_methods"):
+                ft = t.metrics.get("fulltext") or {}
+                extra += f"，全文 {len(ft.get('scanned', []))} 篇，品牌 {len(ft.get('brands', {}))} 个"
+            if plan.has("lab_site"):
+                extra += f"，课题组网站 {'有' if t.metrics.get('lab_site') else '无'}"
             print(f"[{i}/{len(inputs)}] {inp.school} {inp.name}：优先级 {t.priority}，"
-                  f"论文 {t.metrics.get('papers_5y', 0)} 篇，邮箱 {t.email or '无'}，问题 {len(t.issues)} 个")
+                  f"论文 {t.metrics.get('papers_5y', 0)} 篇，邮箱 {t.email or '无'}{extra}，问题 {len(t.issues)} 个")
     results.sort(key=lambda t: (-t.priority, t.name))
     write_csv(results, out_dir / "teachers.csv")
     write_cards(results, out_dir / "cards")
@@ -158,11 +186,19 @@ def cmd_enrich(a: argparse.Namespace) -> int:
     return 0
 
 
+def _level_args(sp: argparse.ArgumentParser) -> None:
+    sp.add_argument("--level", help="抓取级别 L1/L2/L3，默认见 fcrawl levels")
+    sp.add_argument("--with", dest="with_", help="额外启用的模块，逗号分隔，如 lab_site,fulltext_methods")
+    sp.add_argument("--without", help="不启用的模块，逗号分隔，如 openalex")
+    sp.add_argument("--no-papers", action="store_true", help="等同 --without papers")
+    sp.add_argument("--levels-config", help="自定义分级配置文件（默认读 data/levels.yaml，没有则用内置）")
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="fcrawl", description="高校教师画像抓取")
     p.add_argument("-v", "--verbose", action="store_true")
     sub = p.add_subparsers(dest="cmd", required=True)
-    sp = sub.add_parser("profile", help="单个老师：抓主页 + 论文，输出画像卡")
+    sp = sub.add_parser("profile", help="单个老师：按级别抓取，输出画像卡")
     sp.add_argument("name")
     sp.add_argument("--school", required=True)
     sp.add_argument("--college")
@@ -170,17 +206,20 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--email")
     sp.add_argument("--title")
     sp.add_argument("--name-en")
-    sp.add_argument("--no-papers", action="store_true", help="不查论文")
+    _level_args(sp)
     sp.add_argument("--out", action="store_true", help="同时把画像卡写到 data/export/profiles")
     sp.set_defaults(fn=cmd_profile)
-    sp = sub.add_parser("enrich", help="批量：读取外部教师名单（csv/json/jsonl/xlsx），逐个生成画像")
+    sp = sub.add_parser("enrich", help="批量：读取外部教师名单（csv/json/jsonl/xlsx），按级别逐个生成画像")
     sp.add_argument("input")
     sp.add_argument("--name", help="输出目录名，默认 batch_时间")
     sp.add_argument("--limit", type=int)
     sp.add_argument("--max-age-days", type=float, default=30, help="多少天内处理过的老师直接复用")
     sp.add_argument("--force", action="store_true", help="全部重新处理")
-    sp.add_argument("--no-papers", action="store_true")
+    _level_args(sp)
     sp.set_defaults(fn=cmd_enrich)
+    sp = sub.add_parser("levels", help="查看抓取级别和可用模块")
+    sp.add_argument("--levels-config", help="自定义分级配置文件")
+    sp.set_defaults(fn=cmd_levels)
     sub.add_parser("sites", help="列出已配置的学院").set_defaults(fn=cmd_sites)
     sp = sub.add_parser("probe", help="分析一个新的师资列表页")
     sp.add_argument("url")

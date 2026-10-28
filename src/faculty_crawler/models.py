@@ -27,8 +27,11 @@ class Publication(BaseModel):
     """一篇已归属到该老师的论文（来自 Europe PMC / PubMed）。"""
 
     pmid: str | None = None
+    pmcid: str | None = None
+    open_access: bool = False
     doi: str | None = None
     title: str
+    authors: list[str] = Field(default_factory=list)  # 署名（最多 40 个）
     journal: str | None = None
     year: int | None = None
     position: str = "middle"  # first / last / middle / solo

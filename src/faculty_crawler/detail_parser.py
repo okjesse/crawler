@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 from datetime import date
+from urllib.parse import urlsplit
 
 from selectolax.lexbor import LexborHTMLParser as HTMLParser
 
@@ -290,7 +291,19 @@ def extract_detail(t: Teacher, html: str, url: str, rule: DetailRule, school_dom
     for a in tree.css("a"):
         href = absolutize(url, (a.attributes or {}).get("href"))
         label = a.text(strip=True)
-        if href and re.search(r"课题组|实验室|Lab|Group|主页", label, re.I) and not href.startswith(url):
+        if not href or not href.startswith("http") or href.rstrip("/") == url.rstrip("/"):
+            continue
+        if re.search(r"返回|首页|学院|学校|登录|English|中文", label):
+            continue
+        path = urlsplit(href).path.strip("/")
+        looks_lab = re.search(r"课题组|实验室|研究组|个人网站|lab\b|laboratory|group|homepage|website", label, re.I) \
+            or re.search(r"lab|group", urlsplit(href).netloc + "/" + path, re.I)
+        if looks_lab and path not in ("", "index.html", "index.htm"):
+            t.add("lab_url", href, url, snippet=label, method="heuristic", confidence=0.6)
+            break
+        host = urlsplit(href).netloc.lower()
+        if looks_lab and host != urlsplit(url).netloc and not (host.startswith("www.") and host.endswith(".edu.cn") and not path):
+            # 独立域名的课题组网站；排除学校主站首页（如 www.sjtu.edu.cn/）
             t.add("lab_url", href, url, snippet=label, method="heuristic", confidence=0.6)
             break
 

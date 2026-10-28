@@ -1,0 +1,114 @@
+# 抓取分级配置。可复制到 data/levels.yaml 修改（会覆盖这里的同名项），或用 --levels-config 指定文件。
+# 命令行还可以临时增减模块：--level L2 --with lab_site --without openalex
+
+default_level: L2
+
+modules:
+  homepage:
+    name: 个人主页抽取
+    desc: 职称、邮箱、电话、研究方向、经历、主页论文与项目、人才头衔、入职年份、招生招聘
+    cost: 每人 1 次网页请求
+  papers:
+    name: 英文论文与归属
+    desc: Europe PMC 近若干年论文、作者位次、期刊、MeSH，逐篇核对作者单位，邮箱/主页论文/ORCID 锚点
+    requires: []
+    cost: 每人 2 至 5 次接口请求
+  orcid_check:
+    name: ORCID 实名核对
+    desc: 到 ORCID 官方核对登记姓名，剔除论文元数据里标错的合作者 ORCID
+    requires: [papers]
+    cost: 每人 0 至 2 次接口请求
+  grants:
+    name: 论文致谢基金号
+    desc: 从已确认论文的资助信息中汇总国家自然科学基金等基金号，按资助号推断年份与类别
+    requires: [papers]
+    cost: 无额外请求
+  paper_email:
+    name: 论文补邮箱
+    desc: 主页没写邮箱时，从本人论文单位中补（须为本校域名或与姓名对应）
+    requires: [papers]
+    cost: 无额外请求
+  openalex:
+    name: OpenAlex 学术指标
+    desc: h 指数、论文总数、被引、研究主题；用已确认论文的 DOI 反查并验证
+    requires: [papers]
+    needs_env: OPENALEX_API_KEY
+    cost: 每人 3 至 9 次接口请求（单条查询不占额度）
+  group_members:
+    name: 课题组成员推断
+    desc: 以本人为末位作者的论文中的第一作者，估计课题组规模与近期成员
+    requires: [papers]
+    cost: 无额外请求
+  lab_site:
+    name: 课题组网站
+    desc: 顺着主页上的课题组链接抓取成员、招聘、仪器设备（同站最多 5 个页面）
+    requires: [homepage]
+    cost: 每人 0 至 5 次网页请求
+  fulltext_methods:
+    name: 全文方法学挖掘
+    desc: 开放获取论文的“材料与方法”章节：耗材与试剂品牌、国产/进口倾向、实验技术
+    requires: [papers]
+    cost: 每人最多 6 次接口请求
+  # ---- 规划中：配置里可见，但暂不能启用 ----
+  college_news:
+    name: 学院新闻检索
+    desc: 学院新闻/通知按人名检索入职、获奖、立项、招聘、实验室搬迁
+    status: planned
+  llm_extract:
+    name: 大模型兜底抽取
+    desc: 规则抽不全的主页交给大模型抽取；邮箱图片 OCR
+    status: planned
+    needs_env: ANTHROPIC_API_KEY
+  nsfc_grants:
+    name: 国家自然科学基金立项库
+    desc: 完整立项名单、金额、年份
+    status: planned
+    note: 需要 LetPub 等数据库账号，或在国内网络环境运行
+  procurement:
+    name: 招投标数据
+    desc: 学校采购网、中国政府采购网的耗材中标公告（按学院归集）
+    status: planned
+  enterprise:
+    name: 企业关联
+    desc: 老师持股或任职的企业
+    status: planned
+    note: 需要企查查或天眼查付费接口
+  thesis_methods:
+    name: 学位论文方法学
+    desc: 课题组学生学位论文的“材料与方法”，品牌和型号比期刊论文更全
+    status: planned
+    note: 需要知网或万方机构订阅
+  manual_review:
+    name: 人工复核
+    desc: 销售或运营对画像卡关键字段（邮箱、职称、论文归属）逐条确认并回写
+    status: planned
+
+levels:
+  L1:
+    name: 基础
+    desc: 只抓个人主页，最快；适合先过一遍大名单
+    modules: [homepage]
+  L2:
+    name: 标准
+    desc: 主页 + 论文 + 基金号 + 学术指标 + 课题组规模；适合日常销售名单
+    modules: [homepage, papers, orcid_check, grants, paper_email, openalex, group_members]
+    params:
+      since_years: 8
+      max_papers: 300
+  L3:
+    name: 深度
+    desc: L2 + 课题组网站 + 全文方法学（品牌、国产倾向）；适合重点客户
+    modules: [homepage, papers, orcid_check, grants, paper_email, openalex, group_members, lab_site, fulltext_methods]
+    params:
+      since_years: 8
+      max_papers: 300
+      fulltext_max_papers: 6
+      lab_site_max_pages: 5
+  L4:
+    name: 重点攻坚
+    desc: L3 + 付费数据源、大模型和人工复核；只给少量重点客户
+    status: planned
+    note: 需要大模型 API、基金立项库账号、企业信息接口、知网订阅中的一项或多项；资源到位后把对应模块从规划中改为可用
+    modules: [homepage, papers, orcid_check, grants, paper_email, openalex, group_members, lab_site, fulltext_methods,
+              llm_extract, nsfc_grants, procurement, enterprise, thesis_methods, manual_review]
+    # college_news（学院新闻检索）免费，实现后加入 L3

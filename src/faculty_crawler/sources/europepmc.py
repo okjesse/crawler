@@ -223,6 +223,8 @@ def resolve_papers(nf: NameForms, inst: Institution, raw: list[dict], *, known_e
         is_preprint = r.get("source") == "PPR"
         pub = Publication(
             pmid=r.get("pmid"), doi=r.get("doi"), title=(r.get("title") or "").rstrip("."),
+            pmcid=r.get("pmcid"), open_access=(r.get("isOpenAccess") == "Y" or r.get("inEPMC") == "Y") and bool(r.get("pmcid")),
+            authors=[(a.get("fullName") or f"{a.get('lastName', '')} {a.get('initials', '')}").strip() for a in authors[:40]],
             journal=None if is_preprint else ((r.get("journalInfo", {}).get("journal", {}) or {}).get("medlineAbbreviation")
                                               or (r.get("journalInfo", {}).get("journal", {}) or {}).get("title")),
             year=int(r["pubYear"]) if str(r.get("pubYear", "")).isdigit() else None,
@@ -342,7 +344,7 @@ def orcid_name_ok(api: Fetcher, orcid: str, nf: NameForms) -> bool | None:
 
 def find_papers(api: Fetcher, nf: NameForms, inst: Institution, *, known_email: str | None = None,
                 seed_text: str = "", college: str | None = None, since: int | None = None,
-                max_results: int = 300) -> PaperResult:
+                max_results: int = 300, check_orcid: bool = True) -> PaperResult:
     """检索顺序：主页论文标题（精确，拿 ORCID）→ ORCID 全量 → 姓名 + 学校。"""
     learn_from_seeds(nf, seed_text)
     q = build_query(nf, inst, since)
@@ -356,7 +358,7 @@ def find_papers(api: Fetcher, nf: NameForms, inst: Institution, *, known_email: 
         pr = resolve_papers(nf, inst, raw, known_email=known_email, seed_text=seed_text, college=college)
         bad: set[str] = set()
         # ORCID 实名核对：论文元数据有时把合作者的 ORCID 标到本人名下
-        while pr.orcid and orcid_name_ok(api, pr.orcid, nf) is False:
+        while check_orcid and pr.orcid and orcid_name_ok(api, pr.orcid, nf) is False:
             bad.add(pr.orcid)
             pr = resolve_papers(nf, inst, raw, known_email=known_email, seed_text=seed_text, college=college, bad_orcids=bad)
         if pr.orcid:
@@ -366,7 +368,7 @@ def find_papers(api: Fetcher, nf: NameForms, inst: Institution, *, known_email: 
         capped = len(main) >= max_results
         raw += main
         pr = resolve_papers(nf, inst, raw, known_email=known_email, seed_text=seed_text, college=college, bad_orcids=bad)
-        while pr.orcid and pr.orcid not in bad and orcid_name_ok(api, pr.orcid, nf) is False:
+        while check_orcid and pr.orcid and pr.orcid not in bad and orcid_name_ok(api, pr.orcid, nf) is False:
             bad.add(pr.orcid)
             pr = resolve_papers(nf, inst, raw, known_email=known_email, seed_text=seed_text, college=college, bad_orcids=bad)
         if bad:

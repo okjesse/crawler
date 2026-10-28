@@ -10,7 +10,9 @@
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e '.[dev]'
 fcrawl profile 曹博 --school 上海交通大学 --college 生命科学技术学院 --url http://life.sjtu.edu.cn/teacher/caobo
-fcrawl enrich 名单.csv --name 批次名   # 批量：csv/json/jsonl/xlsx，中英文表头都认
+fcrawl enrich 名单.jsonl --name 批次名            # 批量，默认 L2；csv/json/jsonl/xlsx 都可以
+fcrawl enrich 重点客户.jsonl --level L3 --name 重点  # 深度：加课题组网站、全文方法学
+fcrawl levels                                     # 查看级别与模块，配置在 levels.yaml
 fcrawl sites                     # 备用：已接入的学院
 fcrawl crawl sjtu_life           # 备用：抓取学院名单
 fcrawl report sjtu_life          # 质量报告
@@ -31,6 +33,10 @@ python -m pytest -q              # 单元测试
 | `src/faculty_crawler/institutions.py` | 中文校名 → 英文名、别名、域名（ROR） |
 | `src/faculty_crawler/sources/europepmc.py` | 论文检索与归属消歧 |
 | `src/faculty_crawler/sources/openalex.py` | h 指数等学术指标（需 API Key） |
+| `src/faculty_crawler/levels.py`、`levels.yaml` | 抓取分级 L1/L2/L3 与模块开关 |
+| `src/faculty_crawler/group.py` | 由论文推断课题组成员和规模 |
+| `src/faculty_crawler/sources/fulltext.py`、`brands.yaml` | 开放获取全文方法章节：品牌与国产占比 |
+| `src/faculty_crawler/lab_site.py` | 课题组网站：成员、招聘、仪器 |
 | `src/faculty_crawler/fetcher.py` | 礼貌抓取：按域名限速、重试退避、robots、原始页面落盘缓存、http/https 自动切换 |
 | `src/faculty_crawler/templates/*.yaml` | 每个学院一份站点模板 |
 | `src/faculty_crawler/list_parser.py` | 列表页解析：模板模式和自动模式（人名链接聚类） |

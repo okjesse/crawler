@@ -66,6 +66,10 @@ def tag_techniques(t: Teacher) -> None:
         if paper_hits:
             n += 2 * len(paper_hits)
             why = (why + "；" if why else "") + f"近 5 年 {len(paper_hits)} 篇论文涉及"
+        method_hits = [url for txt, url in t.raw.get("_fulltext_texts", []) if any(p.search(txt) for p in en_pats)]
+        if method_hits:
+            n += 3 * len(method_hits)  # 方法章节是本课题组亲手做的实验，权重更高
+            why = (why + "；" if why else "") + f"{len(method_hits)} 篇论文的方法章节使用"
         if n:
             hits.append((tech, n, why))
     hits.sort(key=lambda x: -x[1])
@@ -152,6 +156,32 @@ def score_signals(t: Teacher) -> None:
     if any(g.kind and "人才" in g.kind for g in t.grants) and not t.honors:
         signals.append("论文致谢含优青/杰青等人才类基金号")
         score += 5
+    g = m.get("group") or {}
+    if g.get("estimated_size", 0) >= 8:
+        signals.append(f"课题组规模较大：近 {g['window_years']} 年至少 {g['estimated_size']} 名第一作者成员，耗材用量大")
+        score += 10
+    elif g.get("estimated_size", 0) >= 4:
+        signals.append(f"课题组中等规模：近 {g['window_years']} 年至少 {g['estimated_size']} 名第一作者成员")
+        score += 5
+    ft = m.get("fulltext") or {}
+    brands = ft.get("brands") or {}
+    own = [b for b, v in brands.items() if v.get("kind") == "own"]
+    # 只算真正在耗材语境里出现的（Matrigel, Corning 是试剂，不算）
+    comp = [(b, v) for b, v in brands.items() if v.get("kind") == "consumable" and v.get("consumable_papers", 0) > 0]
+    if own:
+        signals.insert(0, "论文方法中出现远赞产品：已有使用记录，适合复购和扩品")
+        score += 15
+    if comp:
+        desc = "、".join(f"{b}（{v['consumable_papers']} 篇）" for b, v in comp[:3])
+        signals.append(f"论文方法中出现竞品耗材：{desc}，可针对性替代")
+        score += 5
+    share = ft.get("domestic_share")
+    if share is not None and share >= 0.4:
+        signals.append(f"论文中国产品牌占比 {share:.0%}：对国产品牌接受度较高")
+        score += 5
+    ls = m.get("lab_site") or {}
+    if ls.get("instruments"):
+        signals.append("课题组网站列有仪器设备：" + "、".join(list(ls["instruments"])[:5]))
     if t.position and re.search(r"院长|主任|书记|所长", t.position):
         signals.append(f"行政职务：{t.position}（决策链）")
         score += 10

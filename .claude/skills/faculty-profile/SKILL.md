@@ -35,11 +35,28 @@ pip install -q -e '.[dev]'
 
 只给邮箱不够：没有中文姓名和学校就无法查主页、无法生成署名变体。最少要“姓名 + 学校”，效果最好是“姓名 + 学校 + 邮箱 + 个人主页”。其他列原样保留在记录里。
 
+## 抓取级别
+
+`fcrawl levels` 查看当前配置。默认 L2。
+
+| 级别 | 包含模块 | 适用场景 | 每人开销（约） |
+|---|---|---|---|
+| L1 基础 | 个人主页 | 先过一遍大名单，筛出有主页、有邮箱的 | 1 次网页请求 |
+| L2 标准 | L1 + 论文与归属、ORCID 核对、论文致谢基金号、论文补邮箱、OpenAlex 指标、课题组成员推断 | 日常销售名单 | 5 至 15 次接口请求 |
+| L3 深度 | L2 + 课题组网站、开放获取全文方法学（耗材/试剂品牌、国产占比） | 重点客户 | L2 再加 0 至 11 次请求 |
+
+- 命令行临时增减模块：`--level L2 --with fulltext_methods`、`--level L3 --without lab_site`。加模块会自动补依赖，去掉模块会连带去掉依赖它的模块。
+- 改默认配置：复制 `src/faculty_crawler/levels.yaml` 到 `data/levels.yaml` 修改，或用 `--levels-config 文件`。可以改各级别包含的模块和参数（论文年限、全文篇数、课题组网站页数）。
+- 规划中的模块（学院新闻、大模型兜底、基金立项库、招投标、企业关联）在配置里可见，暂不能启用。
+- 缺少 Key 的模块（如没有 `OPENALEX_API_KEY` 时的 openalex）会自动跳过并提示。
+- 批量续跑时，只有旧结果的模块覆盖本次要求才复用；L2 的结果不会被当作 L3 结果。
+- 建议用法：大名单先跑 L1 或 L2，按优先级挑出前 10% 到 20% 再跑 L3。
+
 ## 任务一：查一位老师
 
 ```bash
 fcrawl profile 曹博 --school 上海交通大学 --college 生命科学技术学院 \
-  --url http://life.sjtu.edu.cn/teacher/caobo [--email ...] [--out]
+  --url http://life.sjtu.edu.cn/teacher/caobo [--email ...] [--level L3] [--out]
 ```
 
 把输出的画像卡交给用户时，主动说明：
@@ -50,7 +67,8 @@ fcrawl profile 曹博 --school 上海交通大学 --college 生命科学技术�
 ## 任务二：批量处理名单
 
 ```bash
-fcrawl enrich 名单.xlsx --name 2026Q4_华东      # 输出到 data/export/2026Q4_华东/
+fcrawl enrich 名单.jsonl --name 2026Q4_华东     # 默认 L2，输出到 data/export/2026Q4_华东/
+fcrawl enrich 重点客户.jsonl --level L3 --name 重点客户
 fcrawl enrich 名单.csv --limit 20               # 先试 20 个
 fcrawl enrich 名单.csv --max-age-days 30        # 30 天内处理过的直接复用（默认）
 fcrawl enrich 名单.csv --force                  # 全部重查
@@ -68,7 +86,10 @@ fcrawl enrich 名单.csv --force                  # 全部重查
 | 近 5 年论文、期刊、作者位次、MeSH 主题词、论文致谢基金号 | Europe PMC（含 PubMed） | 逐篇核对作者本人单位；邮箱、主页论文、ORCID 锚点最可靠 |
 | 邮箱（主页没有时） | 论文作者单位里的邮箱 | 只取本人那一条单位 |
 | h 指数、论文总数、研究主题 | OpenAlex | 需 API Key；按 ORCID 或姓名加机构匹配 |
-| 实验技术、推荐产品 | 关键词规则，映射表在 `src/faculty_crawler/product_map.yaml` | 推断，需确认 |
+| 课题组规模下限、近期成员 | 本人为末位作者论文的第一作者（L2） | 是下限，不含未发表论文的成员 |
+| 论文中的耗材/试剂品牌、国产占比 | 开放获取论文的方法章节，只看本人为第一或末位作者的论文（L3） | 直接证据，附原句和链接；品牌库在 `src/faculty_crawler/brands.yaml` |
+| 课题组网站成员、招聘、仪器设备 | 主页上的课题组链接，同站最多 5 页（L3） | 规则抽取 |
+| 实验技术、推荐产品 | 关键词规则，映射表在 `src/faculty_crawler/product_map.yaml`；L3 时方法章节权重更高 | 推断，需确认 |
 | 优先级、销售信号 | 规则，见 `src/faculty_crawler/enrich.py` | 可按销售反馈调整 |
 
 用户质疑某个值时，查数据库 `evidence` 表（`sqlite3 data/faculty.sqlite "select field,value,source_url,snippet from evidence where teacher_key like '%姓名%'"`），给出来源链接和原文片段。

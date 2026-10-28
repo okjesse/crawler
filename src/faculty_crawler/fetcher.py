@@ -133,7 +133,9 @@ class Fetcher:
         return self.client.get(url, headers={"User-Agent": random.choice(config.USER_AGENTS), **(headers or {})})
 
     # ---------- 主入口 ----------
-    def get(self, url: str, *, force: bool = False, headers: dict | None = None) -> Page:
+    def get(self, url: str, *, force: bool = False, headers: dict | None = None, retries: int | None = None,
+            cache_errors: bool = False) -> Page:
+        """cache_errors=True 时，4xx/5xx 结果也写缓存（用于“全文不开放”这类稳定的失败，避免重跑时反复请求）。"""
         if self.use_cache and not force:
             cached = self._read_cache(url)
             if cached:
@@ -147,15 +149,15 @@ class Fetcher:
             raise FetchError(f"robots.txt 不允许抓取: {target}")
 
         last_err: Exception | None = None
-        for attempt in range(config.MAX_RETRIES):
+        for attempt in range(retries or config.MAX_RETRIES):
             try:
                 r = self._get_raw(target, host, headers)
-                if r.status_code in (429, 500, 502, 503, 504):
+                if r.status_code in (429, 500, 502, 503, 504) and not (cache_errors and attempt + 1 >= (retries or config.MAX_RETRIES)):
                     raise httpx.HTTPStatusError(f"HTTP {r.status_code}", request=r.request, response=r)
                 charset = r.charset_encoding
                 html = decode_html(r.content, charset)
                 page = Page(url=url, final_url=str(r.url), status=r.status_code, html=html)
-                if r.status_code == 200 and self.use_cache:
+                if self.use_cache and (r.status_code == 200 or (cache_errors and r.status_code >= 400 and r.status_code != 429)):
                     self._write_cache(page)
                 return page
             except (httpx.ConnectError, httpx.ProxyError) as e:

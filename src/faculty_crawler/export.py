@@ -10,6 +10,7 @@ from .models import SiteReport, Teacher
 
 CSV_COLUMNS = [
     ("编号", lambda t: t.raw.get("input_id") or ""),
+    ("抓取级别", lambda t: t.raw.get("level") or ""),
     ("优先级", lambda t: t.priority),
     ("学校", lambda t: t.school),
     ("学院", lambda t: t.college),
@@ -40,6 +41,12 @@ CSV_COLUMNS = [
     ("ORCID", lambda t: t.orcid or ""),
     ("论文归属依据", lambda t: "、".join(t.metrics.get("paper_anchors", [])) or ("仅姓名+单位" if t.publications else "")),
     ("待确认同名论文", lambda t: t.possible_publications or ""),
+    ("课题组规模下限", lambda t: (t.metrics.get("group") or {}).get("estimated_size", "")),
+    ("论文中的耗材品牌", lambda t: "、".join(f"{b}({v.get('consumable_papers', 0)})" for b, v in ((t.metrics.get("fulltext") or {}).get("brands") or {}).items() if v.get("kind") in ("consumable", "own") and v.get("consumable_papers", 0))),
+    ("论文中的试剂品牌", lambda t: "、".join(f"{b}({v['papers']})" for b, v in ((t.metrics.get("fulltext") or {}).get("brands") or {}).items() if v.get("kind") == "reagent")[:200]),
+    ("国产品牌占比", lambda t: "" if (t.metrics.get("fulltext") or {}).get("domestic_share") is None else f"{t.metrics['fulltext']['domestic_share']:.0%}"),
+    ("课题组网站", lambda t: t.lab_url or ""),
+    ("课题组网站仪器", lambda t: "、".join((t.metrics.get("lab_site") or {}).get("instruments", {}))),
     ("招生招聘", lambda t: "；".join(t.recruiting)[:200]),
     ("数据置信度", lambda t: t.confidence),
     ("待核问题", lambda t: "；".join(t.issues)),
@@ -76,7 +83,8 @@ def card_markdown(t: Teacher) -> str:
         return f" [来源]({e.source_url})"
 
     lines = [f"# {t.name}｜{t.school} {t.college}", ""]
-    lines.append(f"**优先级 {t.priority}**　数据置信度 {t.confidence:.0%}　抓取于 {t.fetched_at:%Y-%m-%d}")
+    lvl = f"　抓取级别 {t.raw['level']}" if t.raw.get("level") else ""
+    lines.append(f"**优先级 {t.priority}**　数据置信度 {t.confidence:.0%}　抓取于 {t.fetched_at:%Y-%m-%d}{lvl}")
     lines.append("")
     if t.signals:
         lines.append("## 销售信号")
@@ -139,6 +147,42 @@ def card_markdown(t: Teacher) -> str:
             for p in t.publications[:8]:
                 lines.append(f"- {p.year} *{p.journal or ''}* [{p.title[:150]}]({p.url})（{pos.get(p.position, p.position)}）")
             lines.append("")
+    g = m.get("group") or {}
+    if g.get("first_authors"):
+        lines.append(f"## 课题组成员（由论文推断，规模下限 {g['estimated_size']} 人）")
+        lines.append(f"- 近 {g['window_years']} 年以本人为末位作者的论文 {g['last_author_papers']} 篇，其中第一作者 {g['estimated_size']} 人，近 2 年仍在发表的 {g['recent_members']} 人。")
+        lines.append("- 近期成员：" + "、".join(f"{x['name']}（{x['latest_year']}）" for x in g["first_authors"][:8]))
+        lines.append(f"- 说明：{g['note']}")
+        lines.append("")
+    ft = m.get("fulltext") or {}
+    if ft.get("scanned") or ft.get("candidates"):
+        lines.append("## 论文方法学（开放获取全文的“材料与方法”）")
+        lines.append(f"- 本人为第一或末位作者的开放获取论文 {ft.get('candidates', 0)} 篇，读取到方法章节 {len(ft.get('scanned', []))} 篇。")
+        brands = ft.get("brands") or {}
+        kinds = {"own": "远赞", "consumable": "耗材", "reagent": "试剂/仪器"}
+        origins = {"domestic": "国产", "import": "进口"}
+        if brands:
+            for b, v in list(brands.items())[:10]:
+                ex = (v.get("examples") or [{}])[0]
+                lines.append(f"- **{b}**（{kinds.get(v['kind'], v['kind'])}，{origins.get(v['origin'], '')}）：{v['papers']} 篇论文提到，其中耗材语境 {v['consumable_mentions']} 处。例：“{ex.get('snippet', '')[:160]}” [来源]({ex.get('url', '')})")
+            if ft.get("domestic_share") is not None:
+                lines.append(f"- 国产品牌占比（按论文篇次）：{ft['domestic_share']:.0%}")
+        else:
+            lines.append("- 方法章节中没有识别到品牌库里的品牌。")
+        lines.append("")
+    ls = m.get("lab_site") or {}
+    if ls:
+        lines.append(f"## 课题组网站 [链接]({ls.get('url')})")
+        lines.append(f"- 读取页面 {len(ls.get('pages', []))} 个。")
+        if ls.get("members"):
+            lines.append(f"- 页面列出的成员姓名 {len(ls['members'])} 个：{'、'.join(ls['members'][:15])}")
+        if ls.get("roles"):
+            lines.append("- 成员身份提及：" + "、".join(f"{k} {v}" for k, v in ls["roles"].items()))
+        if ls.get("instruments"):
+            lines.append("- 仪器设备：" + "、".join(ls["instruments"]))
+        if ls.get("errors"):
+            lines.append(f"- 读取失败 {len(ls['errors'])} 个页面")
+        lines.append("")
     china = [g for g in t.grants if "china" in g.agency.lower() or "中国" in g.agency]
     if china:
         lines.append("## 论文致谢中的国内基金（资助号推断年份与类别）")

@@ -1,0 +1,51 @@
+# 论文“材料与方法”中识别的品牌。产品/市场团队可直接维护。
+# kind: own = 远赞自有；consumable = 耗材竞品；reagent = 试剂/仪器品牌（用于判断国产/进口倾向）
+# origin: domestic = 国产，import = 进口
+# patterns 为大小写不敏感的正则，按词首匹配。
+brands:
+  Yuanzan:        {kind: own,        origin: domestic, patterns: ["yuanzan", "远赞"]}
+  Corning:        {kind: consumable, origin: import,   patterns: ["corning", "costar"]}
+  Falcon:         {kind: consumable, origin: import,   patterns: ["falcon"]}
+  Thermo Nunc:    {kind: consumable, origin: import,   patterns: ["nunc"]}
+  Eppendorf:      {kind: consumable, origin: import,   patterns: ["eppendorf"]}
+  Axygen:         {kind: consumable, origin: import,   patterns: ["axygen"]}
+  Greiner:        {kind: consumable, origin: import,   patterns: ["greiner"]}
+  Sarstedt:       {kind: consumable, origin: import,   patterns: ["sarstedt"]}
+  TPP:            {kind: consumable, origin: import,   patterns: ["tpp(?![a-z])"]}
+  SPL:            {kind: consumable, origin: import,   patterns: ["spl life sciences"]}
+  Rainin:         {kind: consumable, origin: import,   patterns: ["rainin"]}
+  Gilson:         {kind: consumable, origin: import,   patterns: ["gilson"]}
+  Biologix:       {kind: consumable, origin: import,   patterns: ["biologix"]}
+  NEST:           {kind: consumable, origin: domestic, patterns: ["nest biotech", "wuxi nest", "耐思"]}
+  JET Biofil:     {kind: consumable, origin: domestic, patterns: ["jet biofil", "jet bio-?filtration", "洁特"]}
+  Kirgen:         {kind: consumable, origin: domestic, patterns: ["kirgen"]}
+  Labselect:      {kind: consumable, origin: domestic, patterns: ["labselect"]}
+  Biosharp:       {kind: consumable, origin: domestic, patterns: ["biosharp", "白鲨"]}
+  Thermo Fisher:  {kind: reagent,    origin: import,   patterns: ["thermo fisher", "thermo scientific", "invitrogen", "gibco", "life technologies", "applied biosystems"]}
+  Qiagen:         {kind: reagent,    origin: import,   patterns: ["qiagen"]}
+  NEB:            {kind: reagent,    origin: import,   patterns: ["new england biolabs", "neb(?![a-z])"]}
+  Takara:         {kind: reagent,    origin: import,   patterns: ["takara", "clontech"]}
+  Sigma-Aldrich:  {kind: reagent,    origin: import,   patterns: ["sigma[- ‐]?aldrich", "sigma(?=\\s*[,;)(])", "merck"]}
+  Bio-Rad:        {kind: reagent,    origin: import,   patterns: ["bio-?rad"]}
+  Roche:          {kind: reagent,    origin: import,   patterns: ["roche"]}
+  Promega:        {kind: reagent,    origin: import,   patterns: ["promega"]}
+  Abcam:          {kind: reagent,    origin: import,   patterns: ["abcam"]}
+  Cell Signaling: {kind: reagent,    origin: import,   patterns: ["cell signaling technology"]}
+  Beckman:        {kind: reagent,    origin: import,   patterns: ["beckman"]}
+  Vazyme:         {kind: reagent,    origin: domestic, patterns: ["vazyme", "诺唯赞"]}
+  Yeasen:         {kind: reagent,    origin: domestic, patterns: ["yeasen", "翌圣"]}
+  TransGen:       {kind: reagent,    origin: domestic, patterns: ["transgen", "全式金"]}
+  Beyotime:       {kind: reagent,    origin: domestic, patterns: ["beyotime", "碧云天"]}
+  Solarbio:       {kind: reagent,    origin: domestic, patterns: ["solarbio", "索莱宝"]}
+  Sangon:         {kind: reagent,    origin: domestic, patterns: ["sangon", "生工"]}
+  Tiangen:        {kind: reagent,    origin: domestic, patterns: ["tiangen", "天根"]}
+  GenScript:      {kind: reagent,    origin: domestic, patterns: ["genscript", "金斯瑞"]}
+  Abclonal:       {kind: reagent,    origin: domestic, patterns: ["abclonal"]}
+  Proteintech:    {kind: reagent,    origin: domestic, patterns: ["proteintech"]}
+  MedChemExpress: {kind: reagent,    origin: domestic, patterns: ["medchemexpress", "mce(?![a-z])"]}
+  Selleck:        {kind: reagent,    origin: import,   patterns: ["selleck"]}
+
+# 句子里出现这些词，说明提到的是耗材（不是仪器或试剂）
+consumable_words: ["tip", "tips", "tube", "tubes", "plate", "plates", "flask", "flasks", "dish", "dishes",
+  "pipette", "pipettes", "strip", "strips", "cryovial", "cryovials", "well", "wells", "filter", "serological",
+  "conical", "microcentrifuge", "transwell", "chamber slide"]
