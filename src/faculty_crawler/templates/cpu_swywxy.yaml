@@ -1,0 +1,21 @@
+id: cpu_swywxy
+school: 中国药科大学
+college: 生物药物学院
+school_domains: [cpu.edu.cn]
+cms: webplus
+notes: >
+  博达 WebPlus 标准栏目列表：.news_title a，标题形如“博士生导师 张三”；分页为 listN.htm。
+  详情页正文在 .wp_articlecontent，为自由文本简介，无固定小标题。
+  栏目“师资力量”只发布了部分导师，教师总数明显偏少，需另找来源（研究生院导师库、学校新闻等）。
+expected_min_teachers: 40
+list:
+  urls: [https://swywxy.cpu.edu.cn/9902/list.htm]
+  mode: flat
+  scope: .col_news_list
+  item: .news_title a
+  name: {attr: title}
+  label: {attr: title}
+  url: {attr: href, text: false}
+  pagination: webplus
+detail:
+  content: .wp_articlecontent

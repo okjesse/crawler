@@ -1,0 +1,25 @@
+id: sjtu_life
+school: 上海交通大学
+college: 生命科学技术学院
+school_domains: [sjtu.edu.cn]
+cms: sjtu-life-custom
+notes: >
+  教工名录按“系所 → 职称分组 → 姓名”静态渲染；链接 data-name 属性带职称。
+  详情页为学院统一教师主页系统（life.sjtu.edu.cn/teacher/<id>），含基本信息、学术经历、研究方向、代表论著、承担项目。
+  “支撑队伍”分组也在同一页，作为采购执行人线索保留，岗位类型标为“支撑”。
+expected_min_teachers: 150
+list:
+  urls: [https://life.sjtu.edu.cn/T/Index/zc]
+  mode: grouped
+  scope: .jiao-con
+  section: .shengwu
+  section_title: h5
+  group: .sheng-div
+  group_title: .sheng-tit span
+  item: .sheng-ul li a
+  name: {attr: title}
+  title: {attr: data-name, text: false}
+  url: {attr: href, text: false}
+detail:
+  content: null
+  drop: [nav, header, footer, .navbar, .footer, .wc-menu, script, style, .carousel]
