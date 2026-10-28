@@ -14,38 +14,50 @@ products:
 techniques:
   细胞培养:
     keywords: [细胞培养, 细胞系, 类器官, 干细胞, 原代细胞, 肿瘤细胞, 细胞治疗, CAR-T, iPSC, organoid, cell line, 细胞模型, 细胞生物学]
+    keywords_en: ["cell culture", "cell line", "organoid", "stem cell", "ipsc", "primary cell", "car-t", "cultured cells", "hela", "hek293"]
     products: [flask, dish_plate, tube, tips, pipette, cryo]
   PCR/qPCR:
     keywords: [PCR, qPCR, RT-PCR, 基因表达, 分子诊断, 核酸检测, 基因检测, 定量检测, 分子标记]
+    keywords_en: ["pcr", "qpcr", "rt-qpcr", "polymerase chain reaction", "gene expression profiling", "molecular diagnos"]
     products: [pcr_strip, pcr_plate, tips, pipette]
   测序与组学:
     keywords: [测序, 组学, 单细胞, 转录组, 基因组, 宏基因组, 表观, 甲基化, sequencing, "-seq", 核酸组学, 非编码RNA, RNA修饰, 蛋白组, 代谢组]
+    keywords_en: ["sequencing", "rna-seq", "single-cell", "transcriptom", "genome-wide", "metagenom", "epigenom", "methylation", "proteom", "metabolom", "multi-omics", "high-throughput nucleotide"]
     products: [pcr_strip, tips, tube, pipette]
   分子克隆与基因编辑:
     keywords: [克隆, 质粒, CRISPR, 基因编辑, 载体构建, 突变体, 转基因, 基因敲除, 合成生物学, 基因线路]
+    keywords_en: ["crispr", "plasmid", "cloning", "gene editing", "knockout", "transgenic", "synthetic biology", "mutagenesis", "gene knockdown"]
     products: [tips, tube, pcr_strip, pipette]
   蛋白与结构生物学:
     keywords: [蛋白质, 结构生物学, 冷冻电镜, 晶体结构, 膜蛋白, 蛋白纯化, 酶学, 酶工程, 抗体, 蛋白工程, 生物大分子, 催化机理]
+    keywords_en: ["protein", "cryo-em", "cryoelectron", "crystal structure", "crystallograph", "enzyme", "antibod", "purification", "catalytic", "structural basis"]
     products: [tube, tips, pipette]
   微生物与发酵:
     keywords: [微生物, 细菌, 真菌, 发酵, 菌株, 代谢工程, 病原, 抗生素, 链霉菌, 酵母, 大肠杆菌, 噬菌体, 生物合成]
+    keywords_en: ["bacteri", "microb", "fungal", "fungi", "fermentation", "streptomyces", "yeast", "escherichia coli", "phage", "biosynthe", "salmonella", "gut microbiota"]
     products: [tube, tips, dish_plate, pipette, cryo]
   动物实验:
     keywords: [小鼠, 大鼠, 动物模型, 斑马鱼, 果蝇, 线虫, 模式动物, 在体]
+    keywords_en: ["mice", "mouse", "rats", "zebrafish", "drosophila", "c. elegans", "animal model", "in vivo", "xenograft"]
     products: [tube, cryo, tips]
   植物与农学:
     keywords: [植物, 水稻, 拟南芥, 作物, 玉米, 小麦, 大豆, 组培, 育种, 种质]
+    keywords_en: ["plant", "rice", "arabidopsis", "maize", "wheat", "oryza", "soybean", "crop"]
     products: [tube, pcr_strip, tips, pipette]
   药物筛选与药理:
     keywords: [药物筛选, 高通量, 化合物, 药物发现, 药理, 靶点, 药物设计, 新药, 抗肿瘤药物, 药效]
+    keywords_en: ["drug screening", "high-throughput screening", "inhibitor", "drug discovery", "pharmacolog", "antitumor", "drug design", "compound"]
     products: [tips, dish_plate, tube, pipette]
   免疫学:
     keywords: [免疫, 流式, T细胞, B细胞, 巨噬细胞, 疫苗, 炎症, 自身免疫]
+    keywords_en: ["immun", "t cell", "t-cell", "macrophage", "vaccine", "flow cytometry", "inflammat", "cytokine"]
     products: [tube, tips, flask, dish_plate]
   生物制药与工艺:
     keywords: [生物药物, 生物制药, 生物技术药物, 抗体药物, 重组蛋白, 制剂, 工艺开发, 纯化工艺, 生物反应器]
+    keywords_en: ["biopharmaceutical", "recombinant protein", "bioprocess", "bioreactor", "antibody-drug conjugate", "fusion protein", "mrna vaccine"]
     products: [tube, flask, tips, pipette]
   计算与理论:
     wet: false
     keywords: [生物信息, 计算生物, 机器学习, 人工智能, 深度学习, 数学模型, 理论生物, 分子模拟, 分子动力学, 大数据, 算法]
+    keywords_en: ["machine learning", "deep learning", "computational", "molecular dynamics", "bioinformatic", "algorithm", "artificial intelligence", "neural network"]
     products: []

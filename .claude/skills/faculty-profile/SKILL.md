@@ -1,11 +1,11 @@
 ---
 name: faculty-profile
-description: 抓取并整理中国高校生命科学相关学院的教师信息，生成给远赞销售用的教师画像卡和优先级名单。用于：查某位老师的画像卡、抓取某个学院的全部教师、把一个新学院的师资页接入抓取、查看抓取质量报告。
+description: 根据已有的高校教师信息（姓名、学校，最好带个人主页和邮箱），抓取教师详细画像给远赞销售使用：主页信息、近 5 年英文论文、论文致谢中的基金、实验技术与推荐耗材、销售信号和优先级。用于：查某位老师的详细画像、批量处理外部程序导出的教师名单、解释某个字段的来源。
 ---
 
-# 高校教师画像（远赞销售支持）
+# 教师详细画像（远赞销售支持）
 
-本仓库的 `fcrawl` 命令行负责抓取、抽取、校验、打分和导出。这个 skill 告诉你在什么情况下调用哪个命令，以及怎样判断结果可不可信。
+教师名单由外部程序产出。这个 skill 负责“已知是谁，查清楚他/她”：给定教师记录，输出带来源的画像卡和销售名单。所有逻辑在本仓库的 `fcrawl` 命令行里，skill 只负责调用和解读。
 
 ## 环境准备（每个新会话一次）
 
@@ -13,59 +13,84 @@ description: 抓取并整理中国高校生命科学相关学院的教师信息�
 cd <仓库根目录>
 python3 -m venv .venv && . .venv/bin/activate
 pip install -q -e '.[dev]'
-fcrawl sites            # 列出已接入的学院
 ```
 
-数据默认写到仓库下的 `data/`（已被 .gitignore 忽略）：原始页面缓存在 `data/raw`，SQLite 在 `data/faculty.sqlite`，导出在 `data/export/<site_id>/`。
+可选：设置 `OPENALEX_API_KEY`（免费，见“账号与费用”），启用 h 指数和研究主题。未设置时自动跳过，不影响其他字段。
 
-## 任务一：给销售出某位老师的画像卡
+数据写在仓库下的 `data/`（已被 git 忽略）：页面和 API 缓存在 `data/raw`，数据库在 `data/faculty.sqlite`，导出在 `data/export/`。
 
-1. `fcrawl card <姓名> [--school 学校名]`。
-2. 找不到时，确认该老师所在学院是否已接入（`fcrawl sites`）；已接入就先 `fcrawl crawl <site_id>`，未接入走任务三。
-3. 把画像卡原样交给销售，并提醒两点：
-   - “推断实验技术与推荐产品”是关键词推断，需要沟通确认。
-   - “待核问题”里列出的字段不要直接用于外联。
+## 输入格式
 
-## 任务二：抓取或刷新一个学院
+CSV、TSV、JSON、JSONL、XLSX 都可以，表头中英文都认：
+
+| 字段 | 可用表头 | 是否必填 |
+|---|---|---|
+| 姓名 | 姓名 / name / 教师姓名 | 必填 |
+| 学校 | 学校 / school / 高校 / university | 必填，用中文全称 |
+| 学院 | 学院 / college / 院系 | 强烈建议，用于论文院系比对 |
+| 个人主页 | 个人主页 / url / profile_url / 主页链接 | 强烈建议，没有就只能查论文 |
+| 邮箱 | 邮箱 / email | 建议，是论文归属最强的锚点 |
+| 职称、系所、英文名、电话、编号 | 职称 / 系所 / 英文名 / 电话 / id | 可选 |
+
+其他列原样保留在记录的 `extra` 里。
+
+## 任务一：查一位老师
 
 ```bash
-fcrawl crawl <site_id>            # 有缓存的页面不会重复请求
-fcrawl crawl <site_id> --max-age 720   # 缓存超过 30 天的页面重抓
-fcrawl report <site_id>           # 质量报告
+fcrawl profile 曹博 --school 上海交通大学 --college 生命科学技术学院 \
+  --url http://life.sjtu.edu.cn/teacher/caobo [--email ...] [--out]
 ```
 
-产物在 `data/export/<site_id>/`：
-- `<site_id>_teachers.csv`：销售名单，按优先级排序，Excel 直接打开。
-- `cards/`：每位老师一张 Markdown 画像卡，文件名前缀是优先级分数。
-- `<site_id>_report.md`：覆盖率、字段填充率、问题分布、告警。
+把输出的画像卡交给用户时，主动说明：
+- “归属依据”一行。显示“仅姓名与单位”时，论文可能混入同名同校的其他老师，提醒销售核对。
+- “待确认问题”里的条目。
+- 推荐产品是根据研究方向和论文关键词推断的，需要沟通确认。
 
-**质量门槛**（命令退出码为 2 表示没达标）：
-- 详情页覆盖率 ≥ 95%。
-- 教师数不低于模板里的 `expected_min_teachers`。低于时说明该学院官网只发布了部分教师，要在报告里明确告诉用户，并建议补充来源。
-- 邮箱填充率 ≥ 80%。低于时先抽查 2 到 3 个详情页，确认是页面本身没写邮箱，还是图片或脚本混淆。
+## 任务二：批量处理名单
 
-## 任务三：接入一个新学院
+```bash
+fcrawl enrich 名单.xlsx --name 2026Q4_华东      # 输出到 data/export/2026Q4_华东/
+fcrawl enrich 名单.csv --limit 20               # 先试 20 个
+fcrawl enrich 名单.csv --max-age-days 30        # 30 天内处理过的直接复用（默认）
+fcrawl enrich 名单.csv --force                  # 全部重查
+```
 
-1. 找到师资列表页 URL（学院官网“师资队伍/教工名录/导师”栏目）。
-2. `fcrawl probe <列表页URL>`：查看人名链接簇。最大簇就是教师列表时，自动模式即可用。
-3. 在 `src/faculty_crawler/templates/` 新建 `<学校拼音缩写>_<学院缩写>.yaml`，参考现有两份模板：
-   - 有“系所/职称”分组标题的用 `mode: grouped`，填 `section`、`group` 等选择器，分组标题会变成系所和职称。
-   - 博达 WebPlus 站点（URL 形如 `/9902/list.htm`、详情 `/xx/xx/cXXXXaXXXXX/page.htm`）用 `mode: flat`，`pagination: webplus`，详情 `content: .wp_articlecontent`。
-   - 拿不准就用 `mode: auto`。
-   - 必填 `school_domains`（校验邮箱是否本校）和 `expected_min_teachers`（覆盖率告警）。
-4. `fcrawl crawl <新site_id> --limit 10`，逐张看画像卡，核对姓名、职称、邮箱、研究方向是否和网页一致。
-5. 通过后跑全量，把质量报告的结论告诉用户。
-6. 新站点的前 20 条需要人工全部核对一遍；之后按 3% 抽检。
+产物：`teachers.csv`（按优先级排序，Excel 可直接打开）和 `cards/`（每人一张 Markdown 画像卡，文件名前缀是优先级分数）。中途中断后重新执行同一命令即可续跑，页面和 API 结果都有本地缓存。
 
-## 判断结果时的注意事项
+批量结束后给用户一个简短质量小结：处理人数、有主页的比例、邮箱填充率、找到论文的比例、“仅姓名与单位”归属的人数、待确认论文最多的几位。
 
-- 每个字段在 SQLite 的 `evidence` 表里都有来源 URL 和原文片段。用户质疑某个值时，先查证据再回答。
-- “新进 PI”依赖入职年份，只从“XXXX 年加入/入职本校”或“XXXX-至今 本校”识别。没写年份的老师不会被标为新进，不代表不是新人。
-- 同名老师会被标“站内同名，需人工确认”，不要自动合并。
-- 优先级分数的规则在 `src/faculty_crawler/enrich.py`，技术到产品的映射在 `src/faculty_crawler/product_map.yaml`，产品团队可以直接改映射文件。
+## 每个字段从哪里来
+
+| 字段 | 来源 | 可信度说明 |
+|---|---|---|
+| 职称、邮箱、电话、办公室、研究方向、经历、主页论文、项目、招生招聘、人才头衔、入职年份 | 个人主页 | 规则抽取；输入里给了职称和邮箱时以输入为准 |
+| 近 5 年论文、期刊、作者位次、MeSH 主题词、论文致谢基金号 | Europe PMC（含 PubMed） | 逐篇核对作者本人单位；邮箱、主页论文、ORCID 锚点最可靠 |
+| 邮箱（主页没有时） | 论文作者单位里的邮箱 | 只取本人那一条单位 |
+| h 指数、论文总数、研究主题 | OpenAlex | 需 API Key；按 ORCID 或姓名加机构匹配 |
+| 实验技术、推荐产品 | 关键词规则，映射表在 `src/faculty_crawler/product_map.yaml` | 推断，需确认 |
+| 优先级、销售信号 | 规则，见 `src/faculty_crawler/enrich.py` | 可按销售反馈调整 |
+
+用户质疑某个值时，查数据库 `evidence` 表（`sqlite3 data/faculty.sqlite "select field,value,source_url,snippet from evidence where teacher_key like '%姓名%'"`），给出来源链接和原文片段。
+
+## 论文归属规则（正确性的关键）
+
+1. 检索：姓名拼音的全名和首字母写法，加学校英文名（由 ROR 自动解析，特殊情况在 `src/faculty_crawler/institutions.yaml` 补充）。
+2. 强锚点：作者单位里出现已知邮箱，或论文标题与主页所列论文一致。拿到 ORCID 后再按 ORCID 补查本人全部论文。
+3. 其余论文必须同时满足：作者本人单位是该校；院系与锚点论文一致，或与学院名对应的英文关键词一致。ORCID 不同的一律排除。
+4. 达不到第 3 条的列为“待确认”，不计入统计，在画像卡中显示数量。
+
+## 备用：按学院抓名单
+
+外部程序没覆盖到的学院，可以用模板抓列表：`fcrawl sites`、`fcrawl probe <列表页URL>`、`fcrawl crawl <site_id>`、`fcrawl report <site_id>`。模板写法参考 `src/faculty_crawler/templates/`。
+
+## 账号与费用
+
+- Europe PMC、ROR：免费，无需账号。
+- OpenAlex：免费 API Key，每天 1 美元额度（约 1 万次请求），按邮箱申请，激活后设置 `OPENALEX_API_KEY`。
+- 全量（约 10 万老师）建议：多申请一个 OpenAlex Key 或购买付费额度；见 `docs/02-试点报告.md` 的资源清单。
 
 ## 合规边界
 
-- 只采集学校公开发布的工作信息（姓名、职称、工作邮箱和电话、研究方向、论文、项目）。
-- 不采集私人手机、身份证、家庭住址；不登录、不绕过验证码；遵守 robots.txt；每个域名请求间隔默认 2.5 秒。
-- 画像卡用于销售了解客户，不用于群发邮件。老师要求删除时，从数据库删除并在模板里排除。
+- 只用学校公开发布的工作信息和公开学术数据库，不采集私人手机、身份证、家庭住址。
+- 不登录、不绕过验证码；学校网站遵守 robots.txt，同一域名请求间隔默认 2.5 秒。
+- 画像卡用于销售了解客户，不用于群发邮件；老师要求删除时从数据库删除。

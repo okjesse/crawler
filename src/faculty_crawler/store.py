@@ -39,7 +39,7 @@ class Store:
         self.db = sqlite3.connect(self.path)
         self.db.executescript(SCHEMA)
 
-    def save_site(self, site_id: str, teachers: list[Teacher], report: SiteReport) -> None:
+    def save_site(self, site_id: str, teachers: list[Teacher], report: SiteReport, mark_inactive: bool = True) -> None:
         now = datetime.now(timezone.utc).isoformat()
         cur = self.db.cursor()
         seen = []
@@ -60,7 +60,7 @@ class Store:
                  for e in t.evidence],
             )
         # 本次没出现的老师标记为不活跃（调离/退休/页面改版），不删除
-        if seen:
+        if seen and mark_inactive:
             q = ",".join("?" * len(seen))
             cur.execute(f"UPDATE teacher SET active=0 WHERE site_id=? AND key NOT IN ({q})", (site_id, *seen))
         cur.execute("INSERT INTO run(site_id,started_at,finished_at,report) VALUES (?,?,?,?)",
@@ -78,6 +78,19 @@ class Store:
             sql += " AND active=1"
         sql += " ORDER BY priority DESC, name"
         return [Teacher.model_validate_json(r[0]) for r in self.db.execute(sql, args)]
+
+    def recent_keys(self, site_id: str, max_age_days: float) -> set[str]:
+        from datetime import timedelta
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=max_age_days)).isoformat()
+        rows = self.db.execute("SELECT key FROM teacher WHERE site_id=? AND last_seen>=?", (site_id, cutoff))
+        return {r[0] for r in rows}
+
+    def get_input(self, name: str, school: str, profile_url: str | None) -> Teacher | None:
+        for (data,) in self.db.execute("SELECT data FROM teacher WHERE site_id='input' AND name=? AND school=?", (name, school)):
+            t = Teacher.model_validate_json(data)
+            if not profile_url or (t.profile_url or "").rstrip("/") in (profile_url.rstrip("/"), "") or t.raw.get("input_url") == profile_url:
+                return t
+        return None
 
     def find(self, name: str) -> list[Teacher]:
         rows = self.db.execute("SELECT data FROM teacher WHERE name LIKE ? AND active=1", (f"%{name}%",))

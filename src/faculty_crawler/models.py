@@ -23,6 +23,43 @@ class Evidence(BaseModel):
     fetched_at: datetime = Field(default_factory=now_utc)
 
 
+class Publication(BaseModel):
+    """一篇已归属到该老师的论文（来自 Europe PMC / PubMed）。"""
+
+    pmid: str | None = None
+    doi: str | None = None
+    title: str
+    journal: str | None = None
+    year: int | None = None
+    position: str = "middle"  # first / last / middle / solo
+    n_authors: int = 0
+    match: str = ""  # email / seed / orcid / full / initial
+    confidence: float = 0.0
+    author_aff: str = ""
+    mesh: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
+    grants: list[str] = Field(default_factory=list)
+    cited_by: int = 0
+    abstract: str = ""
+
+    @property
+    def url(self) -> str:
+        if self.pmid:
+            return f"https://pubmed.ncbi.nlm.nih.gov/{self.pmid}/"
+        if self.doi:
+            return f"https://doi.org/{self.doi}"
+        return ""
+
+
+class Grant(BaseModel):
+    agency: str
+    grant_id: str | None = None
+    year: int | None = None  # 由资助号推断
+    kind: str | None = None  # 面上 / 青年 / 重点 / 人才类（由资助号推断）
+    n_papers: int = 1
+    source_url: str = ""
+
+
 class TeacherStub(BaseModel):
     """列表页上得到的教师条目。"""
 
@@ -60,6 +97,11 @@ class Teacher(BaseModel):
     projects: list[str] = Field(default_factory=list)  # 主页列出的基金/项目原文
     recruiting: list[str] = Field(default_factory=list)  # 招生/招聘信号原文
     role: str | None = None  # 教研 / 支撑（实验技术、平台、行政）
+    orcid: str | None = None
+    publications: list[Publication] = Field(default_factory=list)  # 已确认归属的论文
+    possible_publications: int = 0  # 同名、待人工确认的论文数
+    grants: list[Grant] = Field(default_factory=list)
+    metrics: dict[str, Any] = Field(default_factory=dict)  # 论文与学术指标
     signals: list[str] = Field(default_factory=list)  # 销售信号标签
     priority: int = 0  # 销售优先级分数
     bio_text: str | None = None
@@ -100,6 +142,7 @@ class SiteReport(BaseModel):
     finished_at: datetime | None = None
     list_pages: int = 0
     stubs: int = 0
+    stubs_with_url: int = 0
     detail_ok: int = 0
     detail_failed: int = 0
     teachers: int = 0

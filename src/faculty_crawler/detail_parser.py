@@ -56,12 +56,31 @@ def _heading(line: str) -> tuple[str, str] | None:
     return None
 
 
+# 常见 CMS 的正文容器（博达、方正、自研站点等）
+CONTENT_CANDIDATES = [
+    ".wp_articlecontent", "#vsb_content", ".v_news_content", ".TRS_Editor", ".Article_Content",
+    ".article-content", ".article_content", ".article", "article", "#content", ".content", ".main-content",
+    ".detail", ".con", ".main",
+]
+
+
 def content_text(html: str, rule: DetailRule) -> tuple[str, HTMLParser]:
     tree = HTMLParser(html)
     for sel in rule.drop:
         for n in tree.css(sel):
             n.decompose()
     node = tree.css_first(rule.content) if rule.content else None
+    if node is None and not rule.content:
+        # 没有模板：选一个足够大的正文容器；容器太小（只是一块简介）就用整页
+        body_text = html_to_text(tree)
+        best, best_len = None, 0
+        for sel in CONTENT_CANDIDATES:
+            for cand in tree.css(sel)[:3]:
+                n = len(html_to_text(cand))
+                if n > best_len:
+                    best, best_len = cand, n
+        if best is not None and best_len >= 0.4 * len(body_text) and best_len >= 150:
+            node = best
     text = html_to_text(node if node is not None else tree)
     return text, tree
 

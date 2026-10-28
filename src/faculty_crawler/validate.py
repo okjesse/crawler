@@ -52,7 +52,12 @@ def mark_duplicates(teachers: list[Teacher]) -> None:
 def site_report(report: SiteReport, teachers: list[Teacher], expected_min: int | None) -> SiteReport:
     n = len(teachers)
     report.teachers = n
-    report.coverage = round(report.detail_ok / report.stubs, 3) if report.stubs else 0.0
+    # 覆盖率只算有主页链接的人；没有个人主页的（访问教授、部分助理研究员）单独列出
+    denom = report.stubs_with_url or report.stubs
+    report.coverage = round(report.detail_ok / denom, 3) if denom else 0.0
+    no_page = report.stubs - report.stubs_with_url
+    if no_page:
+        report.notes.append(f"{no_page} 人在列表页没有个人主页链接，只有姓名、系所和职称")
     report.fill_rates = {f: round(sum(1 for t in teachers if getattr(t, f)) / n, 3) if n else 0.0 for f in KEY_FIELDS}
     c: Counter[str] = Counter()
     for t in teachers:

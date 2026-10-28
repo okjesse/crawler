@@ -8,6 +8,7 @@ dependencies = [
   "selectolax>=1.0",
   "pydantic>=2.5",
   "pyyaml>=6.0",
+  "pypinyin>=0.50",
 ]
 
 [project.optional-dependencies]

@@ -90,6 +90,7 @@ def crawl_site(site: Site, *, fetcher: Fetcher | None = None, store: Store | Non
         if limit:
             stubs = stubs[:limit]
             report.stubs = len(stubs)
+        report.stubs_with_url = sum(1 for s, _ in stubs if s.url)
         teachers: list[Teacher] = []
         for i, (stub, list_url) in enumerate(stubs, 1):
             t = build_teacher(site, stub, list_url)

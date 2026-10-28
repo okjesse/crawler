@@ -1,0 +1,7 @@
+# 人工覆盖表：ROR 查不到或英文写法特殊的学校在这里补充。键为中文校名。
+# 示例：
+# 中国药科大学:
+#   en: China Pharmaceutical University
+#   aliases: [China Pharm Univ]
+#   domains: [cpu.edu.cn]
+{}
