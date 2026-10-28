@@ -9,6 +9,7 @@ from pathlib import Path
 from .models import SiteReport, Teacher
 
 CSV_COLUMNS = [
+    ("编号", lambda t: t.raw.get("input_id") or ""),
     ("优先级", lambda t: t.priority),
     ("学校", lambda t: t.school),
     ("学院", lambda t: t.college),
@@ -127,6 +128,8 @@ def card_markdown(t: Teacher) -> str:
         oa = m.get("openalex")
         if oa:
             lines.append(f"- OpenAlex：h 指数 {oa.get('h_index')}，论文 {oa.get('works_count')} 篇，被引 {oa.get('cited_by_count')} 次；主题：{'、'.join(oa.get('topics') or [])}")
+            if oa.get("note"):
+                lines.append(f"- 注意：{oa['note']}")
         for note in m.get("paper_notes", []):
             lines.append(f"- 注意：{note}")
         lines.append("")

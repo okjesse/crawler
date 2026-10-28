@@ -30,6 +30,8 @@ def build_profile(inp: TeacherInput, *, web: Fetcher, api: Fetcher, papers: bool
     t = Teacher(site_id="input", school=inp.school, college=inp.college or "", name=inp.name,
                 profile_url=inp.profile_url, list_url=None)
     t.raw["input_url"] = inp.profile_url
+    t.raw["input_id"] = inp.id
+    t.raw["input_extra"] = inp.extra
     src = "input://" + input_key(inp)
     t.add("name", inp.name, src, method="input", confidence=1.0, overwrite=True)
     if inp.department:
@@ -102,10 +104,13 @@ def build_profile(inp: TeacherInput, *, web: Fetcher, api: Fetcher, papers: bool
                 t.add("is_pi", True, pr.confirmed[0].url, snippet=f"近 5 年末位作者论文 {last5} 篇",
                       method="api", confidence=0.7)
         # 3. OpenAlex（可选）
-        oa = openalex.author_profile(api, nf, inst, t.orcid)
-        if oa:
+        dois = [p.doi for p in t.publications if p.doi]
+        oa = openalex.author_profile(api, nf, inst, t.orcid, known_dois=dois)
+        if oa and oa.get("rejected"):
+            t.metrics.setdefault("paper_notes", []).append(oa["rejected"])
+        elif oa:
             t.metrics["openalex"] = oa
-            if oa.get("orcid") and not t.orcid:
+            if oa.get("orcid") and not t.orcid and oa.get("verified_by_doi", 0) > 0:
                 t.add("orcid", oa["orcid"], oa.get("openalex_id") or "", method="api", confidence=0.7)
 
     enrich(t)

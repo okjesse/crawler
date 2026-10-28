@@ -127,13 +127,13 @@ class Fetcher:
         rp = self._robots[host]
         return True if rp is None else rp.can_fetch("*", url)
 
-    def _get_raw(self, url: str, host: str) -> httpx.Response:
+    def _get_raw(self, url: str, host: str, headers: dict | None = None) -> httpx.Response:
         self._throttle(host)
         self.stats["network"] += 1
-        return self.client.get(url, headers={"User-Agent": random.choice(config.USER_AGENTS)})
+        return self.client.get(url, headers={"User-Agent": random.choice(config.USER_AGENTS), **(headers or {})})
 
     # ---------- 主入口 ----------
-    def get(self, url: str, *, force: bool = False) -> Page:
+    def get(self, url: str, *, force: bool = False, headers: dict | None = None) -> Page:
         if self.use_cache and not force:
             cached = self._read_cache(url)
             if cached:
@@ -149,7 +149,7 @@ class Fetcher:
         last_err: Exception | None = None
         for attempt in range(config.MAX_RETRIES):
             try:
-                r = self._get_raw(target, host)
+                r = self._get_raw(target, host, headers)
                 if r.status_code in (429, 500, 502, 503, 504):
                     raise httpx.HTTPStatusError(f"HTTP {r.status_code}", request=r.request, response=r)
                 charset = r.charset_encoding

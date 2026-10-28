@@ -117,3 +117,47 @@ def test_do_not_learn_same_surname_advisor():
     assert "yong" not in nf.alt_given
     assert match_author(nf, "Zhang", "Yong", "Y") is None
     assert match_author(nf, "Zhang", "Xiao-Nan", "XN") == "full"
+
+
+class _FakeApi:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def get(self, url, headers=None, force=False):
+        import json as _json
+        from faculty_crawler.fetcher import Page
+        return Page(url=url, final_url=url, status=200, html=_json.dumps(self.payload))
+
+
+def test_orcid_name_check_rejects_coauthor_orcid():
+    from faculty_crawler.sources.europepmc import orcid_name_ok
+    nf = name_forms("魏冬青")
+    khan = {"name": {"given-names": {"value": "Abdul Aziz"}, "family-name": {"value": "Khan"}}}
+    wei = {"name": {"given-names": {"value": "Dong-Qing"}, "family-name": {"value": "Wei"}}}
+    hidden = {"name": None}
+    assert orcid_name_ok(_FakeApi(khan), "0000-0000", nf) is False
+    assert orcid_name_ok(_FakeApi(wei), "0000-0000", nf) is True
+    assert orcid_name_ok(_FakeApi(hidden), "0000-0000", nf) is None
+
+
+def test_bad_orcid_is_ignored_in_attribution():
+    nf = name_forms("曹博")
+    raw = [rec("1", "Anchor paper on RNA modification mapping methods", 2025,
+               [author("Cao", "Bo", "B", LIFE + " caobo@example.edu.cn", "0000-BAD")]),
+           rec("2", "Coauthor paper tagged with wrong ORCID", 2024,
+               [author("Cao", "Bo", "B", "Somewhere Else Institute, USA", "0000-BAD")])]
+    pr = resolve_papers(nf, INST, raw, known_email="caobo@example.edu.cn", seed_text="", college=None,
+                        bad_orcids={"0000-BAD"})
+    assert pr.orcid is None
+    assert [p.pmid for p in pr.confirmed] == ["1"]
+
+
+def test_openalex_name_matching_variants():
+    from faculty_crawler.names import learn_from_seeds
+    from faculty_crawler.sources.openalex import _name_matches
+    nf = learn_from_seeds(name_forms("王柏翔"), "Wang, P. H., Wu T. A. 2020\nLee T, Wang, P. H.*, Lin X. B. 2021")
+    assert _name_matches("Po-Hsiang Wang", nf) and _name_matches("Po\u2010Hsiang Wang", nf)
+    assert not _name_matches("Ping Wang", nf)
+    nf = name_forms("陈光玉")
+    assert _name_matches("Guangyu E. Chen", nf) and _name_matches("Chen Guangyu", nf)
+    assert not _name_matches("Guang Chen", nf)

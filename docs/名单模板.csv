@@ -1,0 +1,4 @@
+编号,姓名,学校,学院,邮箱,个人主页,职称,系所,英文名
+T0001,张三,示例大学,生命科学学院,zhangsan@example.edu.cn,https://life.example.edu.cn/teacher/zhangsan,教授,生物化学系,San Zhang
+T0002,李四,示例大学,药学院,,https://pharm.example.edu.cn/info/1001/2345.htm,副研究员,,
+T0003,王五,示例大学,生命科学学院,wangwu@example.edu.cn,,,,

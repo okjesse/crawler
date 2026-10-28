@@ -131,8 +131,9 @@ def _units(seg: str) -> set[str]:
 
 
 def resolve_papers(nf: NameForms, inst: Institution, raw: list[dict], *, known_email: str | None,
-                   seed_text: str, college: str | None) -> PaperResult:
+                   seed_text: str, college: str | None, bad_orcids: set[str] | None = None) -> PaperResult:
     pr = PaperResult()
+    bad_orcids = bad_orcids or set()
     seed_norm = _norm_title(seed_text)
     known_email = (known_email or "").lower()
     hints = college_hints(college, inst)
@@ -154,6 +155,8 @@ def resolve_papers(nf: NameForms, inst: Institution, raw: list[dict], *, known_e
             aff = " | ".join(x for x in affs if x)
             aid = a.get("authorId") or {}
             orcid = aid.get("value") if aid.get("type") == "ORCID" else None
+            if orcid in bad_orcids:
+                orcid = None  # 实名核对不通过的 ORCID 当作没有
             score = (2 if m == "full" else 1) + (2 if any(p in aff.lower() for p in inst.aff_patterns()) else 0)
             if best is None or score > best[0]:
                 best = (score, i, m, aff, orcid, [e.lower().rstrip(".") for e in EMAIL_RE.findall(aff)])
@@ -315,6 +318,28 @@ def _seed_titles(seed_text: str, limit: int = 4) -> list[str]:
     return titles
 
 
+ORCID_API = "https://pub.orcid.org/v3.0/{}/person"
+
+
+def orcid_name_ok(api: Fetcher, orcid: str, nf: NameForms) -> bool | None:
+    """ORCID 官方登记的姓名是否与本人一致。True 一致，False 不一致，None 查不到/未公开。"""
+    try:
+        page = api.get(ORCID_API.format(orcid), headers={"Accept": "application/json"})
+        d = json.loads(page.html)
+    except (FetchError, json.JSONDecodeError):
+        return None
+    name = d.get("name") or {}
+    fam = norm_token(((name.get("family-name") or {}).get("value")) or "")
+    giv = norm_token(((name.get("given-names") or {}).get("value")) or "")
+    if not fam and not giv:
+        return None
+    # 姓名顺序可能填反
+    for f, g in ((fam, giv), (giv, fam)):
+        if f in nf.surnames and (not g or g == nf.given or g in nf.alt_given or g[:1] in {i[:1] for i in nf.initials}):
+            return True
+    return False
+
+
 def find_papers(api: Fetcher, nf: NameForms, inst: Institution, *, known_email: str | None = None,
                 seed_text: str = "", college: str | None = None, since: int | None = None,
                 max_results: int = 300) -> PaperResult:
@@ -329,13 +354,23 @@ def find_papers(api: Fetcher, nf: NameForms, inst: Institution, *, known_email: 
             if len(words.split()) >= 5:
                 raw += fetch_raw(api, f'TITLE:"{words}"', 3)
         pr = resolve_papers(nf, inst, raw, known_email=known_email, seed_text=seed_text, college=college)
+        bad: set[str] = set()
+        # ORCID 实名核对：论文元数据有时把合作者的 ORCID 标到本人名下
+        while pr.orcid and orcid_name_ok(api, pr.orcid, nf) is False:
+            bad.add(pr.orcid)
+            pr = resolve_papers(nf, inst, raw, known_email=known_email, seed_text=seed_text, college=college, bad_orcids=bad)
         if pr.orcid:
             yr = f" AND PUB_YEAR:[{since} TO {date.today().year}]" if since else ""
             raw += fetch_raw(api, f'AUTHORID:"{pr.orcid}"{yr}', max_results)
         main = fetch_raw(api, q, max_results)
         capped = len(main) >= max_results
         raw += main
-        pr = resolve_papers(nf, inst, raw, known_email=known_email, seed_text=seed_text, college=college)
+        pr = resolve_papers(nf, inst, raw, known_email=known_email, seed_text=seed_text, college=college, bad_orcids=bad)
+        while pr.orcid and pr.orcid not in bad and orcid_name_ok(api, pr.orcid, nf) is False:
+            bad.add(pr.orcid)
+            pr = resolve_papers(nf, inst, raw, known_email=known_email, seed_text=seed_text, college=college, bad_orcids=bad)
+        if bad:
+            pr.notes.append(f"论文元数据中的 ORCID {', '.join(sorted(bad))} 登记姓名与本人不符（多为合作者），已忽略")
     except (FetchError, json.JSONDecodeError) as e:
         pr = PaperResult(query=q)
         pr.notes.append(f"Europe PMC 查询失败：{e}")

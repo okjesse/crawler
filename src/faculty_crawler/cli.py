@@ -126,6 +126,7 @@ def cmd_enrich(a: argparse.Namespace) -> int:
     done = store.recent_keys("input", a.max_age_days) if not a.force else set()
     out_dir = config.EXPORT_DIR / (a.name or f"batch_{datetime.now():%Y%m%d_%H%M}")
     results = []
+    failed = 0
     with Fetcher() as web, _api() as api:
         for i, inp in enumerate(inputs, 1):
             cached = store.get_input(inp.name, inp.school, inp.profile_url) if done else None
@@ -135,8 +136,13 @@ def cmd_enrich(a: argparse.Namespace) -> int:
                 continue
             try:
                 t = build_profile(inp, web=web, api=api, papers=not a.no_papers)
-            except Exception as e:  # 单个老师失败不影响整批
-                print(f"[{i}/{len(inputs)}] {inp.school} {inp.name}：失败 {e}")
+            except Exception as e:  # 单个老师失败不影响整批，但必须在结果里看得到
+                failed += 1
+                print(f"[{i}/{len(inputs)}] {inp.school} {inp.name}：失败 {type(e).__name__}: {e}")
+                old = store.get_input(inp.name, inp.school, inp.profile_url)
+                if old:
+                    old.issues.append(f"本次刷新失败（{type(e).__name__}），以下为 {old.fetched_at:%Y-%m-%d} 的旧数据")
+                    results.append(old)
                 continue
             store.save_site("input", [t], SiteReport(site_id="input", teachers=1), mark_inactive=False)
             results.append(t)
@@ -145,6 +151,8 @@ def cmd_enrich(a: argparse.Namespace) -> int:
     results.sort(key=lambda t: (-t.priority, t.name))
     write_csv(results, out_dir / "teachers.csv")
     write_cards(results, out_dir / "cards")
+    if failed:
+        print(f"\n{failed} 位处理失败，已在名单“待核问题”列注明")
     print(f"\n共 {len(results)} 位；名单 {out_dir / 'teachers.csv'}；画像卡 {out_dir / 'cards'}")
     print(f"网页请求 {web.stats['network']} 次，API 请求 {api.stats['network']} 次，缓存命中 {web.stats['cache'] + api.stats['cache']} 次")
     return 0
