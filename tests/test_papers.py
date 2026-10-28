@@ -161,3 +161,25 @@ def test_openalex_name_matching_variants():
     nf = name_forms("陈光玉")
     assert _name_matches("Guangyu E. Chen", nf) and _name_matches("Chen Guangyu", nf)
     assert not _name_matches("Guang Chen", nf)
+
+
+def test_seed_titles_messy_homepage_formats():
+    from faculty_crawler.sources.europepmc import _seed_titles
+    seed = ("Feng Chen(Corresponding author).The Maturing Development of Gut Microbiota in Commercial Piglets during the Weaning Transition. Front Microbiol 2017\n"
+            "Detoxification of Zearalenone by viable and inactivated cells of Planococcus sp，Food Control 2011")
+    t = _seed_titles(seed)
+    assert t[0] == "The Maturing Development of Gut Microbiota in Commercial Piglets during the Weaning Transition"
+    assert t[1] == "Detoxification of Zearalenone by viable and inactivated cells of Planococcus sp"
+
+
+def test_rare_anchor_unit_does_not_admit_namesake():
+    nf = name_forms("张雁")
+    med = "Department of Gastroenterology, Renji Hospital, School of Medicine, Example University, City, China."
+    raw = [rec(str(i), f"Anchor microbial paper {i} about nucleotide metabolism", 2025,
+               [author("Zhang", "Yan", "Y", LIFE + " zhangyan@example.edu.cn")]) for i in range(5)]
+    raw.append(rec("9", "Anchor with a hospital co-affiliation", 2024,
+                   [author("Zhang", "Yan", "Y", med + " | " + LIFE + " zhangyan@example.edu.cn")]))
+    raw.append(rec("10", "Cirrhosis clinical study", 2026, [author("Zhang", "Yan", "Y", med)]))
+    pr = resolve_papers(nf, INST, raw, known_email="zhangyan@example.edu.cn", seed_text="", college="生命科学技术学院")
+    assert "10" not in {p.pmid for p in pr.confirmed}
+    assert "10" in {p.pmid for p in pr.possible}

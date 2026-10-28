@@ -1,6 +1,7 @@
 """Europe PMC：论文、作者单位、MeSH、资助号。逐篇核对作者本人单位并用锚点消歧。"""
 from __future__ import annotations
 
+import html
 import json
 import logging
 import re
@@ -86,6 +87,12 @@ def fetch_raw(api: Fetcher, query: str, max_results: int = 300) -> list[dict]:
     return out[:max_results]
 
 
+def _clean_title(s: str) -> str:
+    """Europe PMC 标题里常带转义的斜体标签，如 &lt;i&gt;trans&lt;/i&gt;。"""
+    s = html.unescape(html.unescape(s))
+    return re.sub(r"</?[a-zA-Z][^>]{0,20}>", "", s).strip().rstrip(".")
+
+
 def _norm_title(s: str) -> str:
     return re.sub(r"[^a-z0-9]", "", (s or "").lower())
 
@@ -167,6 +174,8 @@ def resolve_papers(nf: NameForms, inst: Institution, raw: list[dict], *, known_e
     anchors_orcid: set[str] = set()
     anchor_dept: set[str] = set()  # 锚点论文中本人在本校的院系词
     anchor_units: set[str] = set()  # 锚点论文中本人在本校的学院/系
+    unit_counts: Counter[str] = Counter()
+    n_anchor_papers = 0
     kinds: dict[int, tuple[str, float]] = {}
     for idx, (r, i, m, aff, orcid, emails) in enumerate(cands):
         title_n = _norm_title(r.get("title", ""))
@@ -179,7 +188,8 @@ def resolve_papers(nf: NameForms, inst: Institution, raw: list[dict], *, known_e
         if orcid:
             anchors_orcid.add(orcid)
         anchor_dept |= _distinct(_dept_segment(aff, inst))
-        anchor_units |= _units(_dept_segment(aff, inst))
+        unit_counts.update(_units(_dept_segment(aff, inst)))
+        n_anchor_papers += 1
     if anchors_orcid:
         pr.orcid = sorted(anchors_orcid)[0]
         if len(anchors_orcid) > 1:
@@ -189,7 +199,11 @@ def resolve_papers(nf: NameForms, inst: Institution, raw: list[dict], *, known_e
         if idx not in kinds and orcid and orcid in anchors_orcid:
             kinds[idx] = ("orcid", 0.95)
             anchor_dept |= _distinct(_dept_segment(aff, inst))
-            anchor_units |= _units(_dept_segment(aff, inst))
+            unit_counts.update(_units(_dept_segment(aff, inst)))
+            n_anchor_papers += 1
+    # 只认锚点论文中反复出现的院系：偶尔一篇挂了医学院等其他单位，不能据此放行同名作者
+    min_count = 1 if n_anchor_papers <= 3 else 2
+    anchor_units = {u for u, c in unit_counts.items() if c >= min_count}
     pr.anchors = sorted({k for k, _ in kinds.values()})
 
     # 第二轮：其余候选。院系要和锚点或学院名一致，否则只列为待确认
@@ -222,7 +236,7 @@ def resolve_papers(nf: NameForms, inst: Institution, raw: list[dict], *, known_e
             grants.append(f"{g.get('agency', '')}|{gid or ''}")
         is_preprint = r.get("source") == "PPR"
         pub = Publication(
-            pmid=r.get("pmid"), doi=r.get("doi"), title=(r.get("title") or "").rstrip("."),
+            pmid=r.get("pmid"), doi=r.get("doi"), title=_clean_title(r.get("title") or ""),
             pmcid=r.get("pmcid"), open_access=(r.get("isOpenAccess") == "Y" or r.get("inEPMC") == "Y") and bool(r.get("pmcid")),
             authors=[(a.get("fullName") or f"{a.get('lastName', '')} {a.get('initials', '')}").strip() for a in authors[:40]],
             journal=None if is_preprint else ((r.get("journalInfo", {}).get("journal", {}) or {}).get("medlineAbbreviation")
@@ -306,7 +320,10 @@ def _seed_titles(seed_text: str, limit: int = 4) -> list[str]:
         if q:
             titles.append(q.group(1).strip(" ."))
         else:
-            segs = re.split(r"[.?!][\"”]?\s+|,\s+|;\s+", re.sub(r"^\s*\d+[.、]\s*", "", ln))
+            ln2 = re.sub(r"^\s*\d+[.、]\s*", "", ln)
+            ln2 = re.sub(r"\((?:corresponding author|co-?first author|通讯作者|共同第一作者)[^)]*\)", " ", ln2, flags=re.I)
+            ln2 = re.sub(r"\.(?=[A-Z][a-z])", ". ", ln2)  # “author).The title” 句号后缺空格
+            segs = re.split(r"[.?!][\"”]?\s+|,\s+|;\s+|[，；]", ln2)
             cands = [x.strip() for x in segs
                      if len(x.split()) >= 6 and sum(1 for w in x.split() if w[:1].islower()) >= 2
                      and not re.search(r"[*#]|et al|^\d", x)]

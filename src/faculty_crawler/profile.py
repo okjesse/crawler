@@ -145,6 +145,14 @@ def build_profile(inp: TeacherInput, *, web: Fetcher, api: Fetcher, plan: Plan |
                 t.recruiting.append(r)
                 t.evidence.append(_ev_lab("recruiting", r, ls["url"]))
 
+    # 主页没写研究方向时，用论文主题补（OpenAlex 主题优先，其次 MeSH 高频词），并标注为推断
+    if not t.research_directions and t.publications:
+        topics = (t.metrics.get("openalex") or {}).get("topics") or t.metrics.get("top_mesh", [])[:5]
+        if topics:
+            t.add("research_directions", list(topics)[:5], t.publications[0].url,
+                  snippet="由论文主题推断", method="api", confidence=0.5)
+            t.raw["research_from_papers"] = True
+
     enrich(t)
     t.raw.pop("_fulltext_texts", None)  # 全文只用于打标签，不落库
     validate_teacher(t, domains)

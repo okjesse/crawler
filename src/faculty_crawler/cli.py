@@ -115,6 +115,16 @@ def _plan(a: argparse.Namespace):
     return plan
 
 
+def cmd_evaluate(a: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from .evaluate import write
+    out = Path(a.out) if a.out else config.EXPORT_DIR / a.batch / "evaluation.md"
+    write(a.batch, out, reference_site=a.reference_site, sample=a.sample)
+    print(f"评测报告：{out}")
+    return 0
+
+
 def cmd_levels(a: argparse.Namespace) -> int:
     print(describe_levels(a.levels_config))
     return 0
@@ -217,6 +227,12 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--force", action="store_true", help="全部重新处理")
     _level_args(sp)
     sp.set_defaults(fn=cmd_enrich)
+    sp = sub.add_parser("evaluate", help="对一个批次做质量评测（填充率、交叉比对、人工抽查清单）")
+    sp.add_argument("batch", help="enrich 的输出目录名，如 pilot_L3")
+    sp.add_argument("--reference-site", help="用于职称交叉比对的学院站点，如 sjtu_life")
+    sp.add_argument("--sample", type=int, default=20, help="人工抽查的论文篇数")
+    sp.add_argument("--out", help="报告路径，默认写在批次目录下 evaluation.md")
+    sp.set_defaults(fn=cmd_evaluate)
     sp = sub.add_parser("levels", help="查看抓取级别和可用模块")
     sp.add_argument("--levels-config", help="自定义分级配置文件")
     sp.set_defaults(fn=cmd_levels)

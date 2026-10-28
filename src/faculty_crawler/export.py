@@ -110,7 +110,8 @@ def card_markdown(t: Teacher) -> str:
             lines.append(f"- **{label}**：{val}{src(field) if field else ''}")
     lines.append("")
     if t.research_directions:
-        lines.append("## 研究方向" + src("research_directions"))
+        hint = "（主页未写，由论文主题推断）" if t.raw.get("research_from_papers") else ""
+        lines.append("## 研究方向" + hint + src("research_directions"))
         lines += [f"- {d}" for d in t.research_directions]
         lines.append("")
     if t.techniques:
